@@ -15,6 +15,9 @@ dt-launchfile-init
 # launching app
 dt-exec echo "This is an empty launch script. Update it to launch your application."
 
+rosrun perception perception.launch
+# rosrun controls controls.launch
+
 
 # ----------------------------------------------------------------------------
 # YOUR CODE ABOVE THIS LINE
