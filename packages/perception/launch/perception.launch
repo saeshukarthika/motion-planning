@@ -1,5 +1,4 @@
 <launch>
     <!-- Template  -->
-    <!-- <node pkg="odom_encoder" type="odom_encoder.py" name="odom_encoder"  output="screen"/> -->
-
+    <node pkg="perception" type="odom_encoder.py" name="odom_encoder"  output="screen"/>
 </launch>

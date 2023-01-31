@@ -9,6 +9,12 @@ from duckietown.dtros import DTROS, NodeType
 from std_msgs.msg import String
 from duckietown_msgs.msg import WheelEncoderStamped
 
+# ~~~~~~~~~~~~~ Geometric Definitions ~~~~~~~~~~~~~~~~~~~~~~
+TICKS_PER_REVOLUTION = 135
+WHEEL_RADIUS = rospy.get_param(f"/{os.environ['VEHICLE_NAME']}/kinematics_node/radius", 100)
+WHEEL_CIRCUMFERENCE =  2 * np.pi * WHEEL_RADIUS
+ROBOT_L = 0.1085 #meters
+sigma = 0.00001 #close enough to zero check
 
 # ~~~~~~~~~~~~~ Kinematic Helper Functions ~~~~~~~~~~~~~~~~~
 ratio_sigma = 0.01
@@ -81,11 +87,14 @@ def are_messages_different(message_one, message_two):
 
     return message_one.header.stamp != message_two.header.stamp
 
+def EWMA(previous, current, a):
+    return (1-a)*previous + a * current
+
 # ~~~~~~~~~~~~~~~~~~ ROS Node ~~~~~~~~~~~~~~~~~~~
 
 class OdometryEncoder(DTROS):
     def __init__(self, node_name) -> None:
-        super(OdometryEncoder, self).__init__(node_name=node_name, NodeType=NodeType.PUBLISHER)
+        super(OdometryEncoder, self).__init__(node_name=node_name, node_type=NodeType.GENERIC)
         
         self.heading = 0
         self.x = 0
@@ -95,10 +104,28 @@ class OdometryEncoder(DTROS):
         self.prev_right_enc_msg = None
         self.left_enc_msg = None
         self.right_enc_msg = None
+
+        self.prev_left_tick = 0
+        self.prev_right_tick = 0
+        
         #sub to left encoder
+        self.left_tick_sub = rospy.Subscriber(
+            f"/{os.environ['VEHICLE_NAME']}/left_wheel_encoder_node/tick", 
+            WheelEncoderStamped,
+            self.left_encoder_cb,
+        )
+
         #sub to right encoder
+        self.right_tick_sub = rospy.Subscriber(
+            f"/{os.environ['VEHICLE_NAME']}/right_wheel_encoder_node/tick", 
+            WheelEncoderStamped,
+            self.right_encoder_cb,
+        )
 
         #TODO: Publish on a topic
+
+
+        self.log("Initalized!")
 
     def left_encoder_cb(self, data):
         self.left_enc_msg = data
@@ -114,8 +141,76 @@ class OdometryEncoder(DTROS):
 
     def update(self):
         
+        #null checks
+        if self.left_enc_msg is None or self.right_enc_msg is None:
+            return
 
-        pass
+        #do not update if both encoder messages haven't been received yet
+        if not are_messages_different(self.left_enc_msg, self.prev_left_enc_msg):
+            return
+        
+        if not are_messages_different(self.right_enc_msg, self.prev_right_enc_msg):
+            return
+
+
+        #calculate encoder differences
+        dtick_left = self.left_enc_msg.data - self.prev_left_enc_msg.data
+        dtick_right = self.right_enc_msg.data - self.prev_right_enc_msg.data
+
+        #filter ticks
+        dtick_left = EWMA(self.prev_left_tick, dtick_left, 0.2)
+        dtick_right = EWMA(self.prev_right_tick, dtick_right, 0.2)
+        self.prev_left_tick = dtick_left
+        self.prev_right_tick = dtick_right
+        
+        #calculate dt.
+        #   dt is hard because we are working with two disjoint message streams.
+        #   They are most likely not going to ever line up perfectly, so if
+        #   we calculate dt using just the left or right messages one of them
+        #   will be shorter. What we really want is the longer of the two times,
+        #   since that will be total time elapsed between updates.
+
+        #   time comes back in nano seconds
+        dt_left = self.left_enc_msg.header.stamp - \
+                  self.prev_left_enc_msg.header.stamp
+    
+        dt_right = self.right_enc_msg.header.stamp - \
+                   self.prev_right_enc_msg.header.stamp 
+
+        dt = max(dt_left, dt_right)
+
+        #dt /= 1e9 #dt is in nano seconds, convert it to seconds
+        dt = dt.to_nsec() / 1000000000.0
+
+        #calculate speeds
+            # 1) ticks per second -> 
+            # 2) revolutions per second ->
+            # 3) meters per second
+        left_tps = dtick_left / dt
+        right_tps = dtick_right / dt
+
+        left_rps = left_tps / TICKS_PER_REVOLUTION
+        right_rps = right_tps / TICKS_PER_REVOLUTION
+
+        left_mps = left_rps * WHEEL_CIRCUMFERENCE
+        right_mps = right_rps * WHEEL_CIRCUMFERENCE
+
+        #update position
+        #self.calculate_new_position(left_mps, right_mps, dt)
+        
+        dr = right_mps * dt
+        dl = left_mps * dt
+        radius = calculate_radius(ROBOT_L, left_mps, right_mps)
+        self.x += radius*np.cos(self.heading)
+        self.y += radius*np.sin(self.heading)
+        self.heading += (dr - dl) / (ROBOT_L)
+
+
+        self.log(f"x: {self.x} y: {self.y} heading: {np.rad2deg(self.heading)} \n\n")
+
+        #set previous 
+        self.prev_left_enc_msg = self.left_enc_msg
+        self.prev_right_enc_msg = self.right_enc_msg
 
     def calculate_new_position(self, vel_left, vel_right, dt):
         """
@@ -126,11 +221,18 @@ class OdometryEncoder(DTROS):
             vel_right: the velocity of the right wheel in meters/sec
             dt: the time interval
         """
-        length = 0 #TODO Get this somehow, load in from file that duckietown provides
+
+        #if the speeds are zero, do not updated
+        #TODO support motion with one wheel
+        if np.abs(vel_left) < sigma or np.abs(vel_right) < sigma:
+            return
+
+        length = ROBOT_L
         radius = calculate_radius(length, vel_left, vel_right)
+        self.log(f"RADIUS: {radius} change")
 
         #straight line case
-        if raidus == math.inf:
+        if radius == math.inf:
             magnitude = vel_left * dt
             dx = magnitude * np.cos(self.heading)
             dy = magnitude * np.sin(self.heading)
@@ -138,10 +240,10 @@ class OdometryEncoder(DTROS):
             self.y += dy
         else:
             w = calculate_angular_veloctiy(length, radius, vel_right)
-            ICCx, ICCy = calculate_ICC(radius, heading, self.x, self.y)
+            ICCx, ICCy = calculate_ICC(radius, self.heading, self.x, self.y)
 
-            rotation = np.array([[np.cos(wdt), -np.sin(wdt), 0],
-                            [np.sin(wdt), np.cos(wdt), 0],
+            rotation = np.array([[np.cos(w*dt), -np.sin(w*dt), 0],
+                            [np.sin(w*dt), np.cos(w*dt), 0],
                             [0, 0, 1]])
 
             frame = np.array([[self.x - ICCx],
@@ -160,5 +262,5 @@ class OdometryEncoder(DTROS):
             self.heading = result[0][2]
         
 if __name__ ==  "__main__":
-    node = OdometryEncoder(node_name="OdometryEncoder")
+    node = OdometryEncoder(node_name="odom_encoder")
     rospy.spin()
