@@ -152,7 +152,6 @@ class OdometryEncoder(DTROS):
         if not are_messages_different(self.right_enc_msg, self.prev_right_enc_msg):
             return
 
-
         #calculate encoder differences
         dtick_left = self.left_enc_msg.data - self.prev_left_enc_msg.data
         dtick_right = self.right_enc_msg.data - self.prev_right_enc_msg.data
@@ -196,71 +195,35 @@ class OdometryEncoder(DTROS):
         right_mps = right_rps * WHEEL_CIRCUMFERENCE
 
         #update position
-        #self.calculate_new_position(left_mps, right_mps, dt)
-        
         dr = right_mps * dt
         dl = left_mps * dt
-        radius = calculate_radius(ROBOT_L, left_mps, right_mps)
-        self.x += radius*np.cos(self.heading)
-        self.y += radius*np.sin(self.heading)
-        self.heading += (dr - dl) / (ROBOT_L)
 
+        #not moving check
+        if np.abs(dr) < sigma or np.abs(dl) < sigma:
+            return
 
-        self.log(f"x: {self.x} y: {self.y} heading: {np.rad2deg(self.heading)} \n\n")
+        radius = calculate_radius(ROBOT_L, left_mps, right_mps)  
+
+        #moving in an arc          
+        if radius != math.inf:
+            dtheta = (dr - dl) / (ROBOT_L)
+            ds = (dr + dl) / 2
+            self.x += ds * np.cos(self.heading + dtheta / 2)
+            self.y += ds * np.sin(self.heading + dtheta / 2)
+            self.heading += dtheta
+        else: #moving forward
+            # they should almost be the same, but avg for further accuracy
+            ds = (dl + dr) / 2
+            self.x += dl * np.cos(self.heading)
+            self.y += dl * np.sin(self.heading)
+        
+        self.log(
+            f"x: {self.x} y: {self.y} heading: {np.rad2deg(self.heading)} \n\n")
 
         #set previous 
         self.prev_left_enc_msg = self.left_enc_msg
         self.prev_right_enc_msg = self.right_enc_msg
-
-    def calculate_new_position(self, vel_left, vel_right, dt):
-        """
-        Updates the estimated positions
-
-        Arguments:
-            vel_left: the velocity of the left wheel in meters/sec
-            vel_right: the velocity of the right wheel in meters/sec
-            dt: the time interval
-        """
-
-        #if the speeds are zero, do not updated
-        #TODO support motion with one wheel
-        if np.abs(vel_left) < sigma or np.abs(vel_right) < sigma:
-            return
-
-        length = ROBOT_L
-        radius = calculate_radius(length, vel_left, vel_right)
-        self.log(f"RADIUS: {radius} change")
-
-        #straight line case
-        if radius == math.inf:
-            magnitude = vel_left * dt
-            dx = magnitude * np.cos(self.heading)
-            dy = magnitude * np.sin(self.heading)
-            self.x += dx
-            self.y += dy
-        else:
-            w = calculate_angular_veloctiy(length, radius, vel_right)
-            ICCx, ICCy = calculate_ICC(radius, self.heading, self.x, self.y)
-
-            rotation = np.array([[np.cos(w*dt), -np.sin(w*dt), 0],
-                            [np.sin(w*dt), np.cos(w*dt), 0],
-                            [0, 0, 1]])
-
-            frame = np.array([[self.x - ICCx],
-                              [self.y - ICCy],
-                              [self.heading]])
-
-            translation = np.array([[ICCx],
-                                    [ICCy],
-                                    [w*dt]])
-
-            result = np.add(np.matmul(rotation, frame), translation)
-            result = result.T
-
-            self.x = result[0][0]
-            self.y = result[0][1]
-            self.heading = result[0][2]
-        
+    
 if __name__ ==  "__main__":
     node = OdometryEncoder(node_name="odom_encoder")
     rospy.spin()
