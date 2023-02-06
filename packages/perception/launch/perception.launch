@@ -1,4 +1,14 @@
 <launch>
-    <!-- Template  -->
-    <node pkg="perception" type="odom_encoder.py" name="odom_encoder"  output="screen"/>
+    
+    <group ns="$(arg veh)">
+
+        <node pkg="perception" type="wheel_odometry_node.py" 
+              name="wheel_odometry"  output="screen">
+              <remap from="~/right_wheel_encoder_node/tick" 
+                     to="/$(arg veh)/right_wheel_encoder_node/tick"/>
+              <remap from="~/left_wheel_encoder_node/tick" 
+                     to="/$(arg veh)/left_wheel_encoder_node/tick"/>
+        </node>
+    </group>
+    
 </launch>

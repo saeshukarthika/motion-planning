@@ -10,8 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(
   FILES
-  trajectory_point.msg
-  wheel_odometry.msg
+  Pose.msg
+  WheelOdometry.msg
 )
 
 generate_messages(
