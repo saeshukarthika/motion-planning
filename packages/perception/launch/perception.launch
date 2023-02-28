@@ -9,6 +9,8 @@
               <remap from="~/left_wheel_encoder_node/tick" 
                      to="/$(arg veh)/left_wheel_encoder_node/tick"/>
         </node>
+
+        <node pkg="perception" type="pose_estimate_node.py"/>
     </group>
     
 </launch>

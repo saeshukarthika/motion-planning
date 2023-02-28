@@ -28,7 +28,8 @@ def are_messages_different(message_one, message_two):
 
 class WheelOdometryNode(DTROS):
     def __init__(self, node_name) -> None:
-        super(WheelOdometryNode, self).__init__(node_name=node_name, node_type=NodeType.GENERIC)
+        super(WheelOdometryNode, self).__init__(
+            node_name=node_name, node_type=NodeType.GENERIC)
         
         self.heading = 0
         self.x = 0
@@ -124,6 +125,7 @@ class WheelOdometryNode(DTROS):
         header = Header()
         header.stamp = rospy.Time.now()
         odometry_msg.header = header
+        odometry_msg.delta = dt
         odometry_msg.left_wheel_velocity = left_mps
         odometry_msg.right_wheel_velocity = right_mps
         self.odom_pub.publish(odometry_msg)

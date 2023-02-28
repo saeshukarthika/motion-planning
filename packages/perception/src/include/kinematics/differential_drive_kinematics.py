@@ -1,3 +1,9 @@
+import math
+
+import numpy as np
+
+from typing import Tuple
+
 #how close to zero should equal zero
 sigma = 0.00001
 
@@ -31,7 +37,7 @@ class DifferentialDriveKinematics():
         if np.abs(ratio - 1) < sigma:
             return math.inf
 
-        R = (0.5 * length * (1 + ratio)) / (1 - ratio)
+        R = (0.5 * self.width * (1 + ratio)) / (1 - ratio)
         return R
 
     def calculate_angular_veloctiy(self,
@@ -69,7 +75,7 @@ class DifferentialDriveKinematics():
         Returns:
             A tuple in the form of (ICCx, ICCy)
         """
-        radius = self.calculate_radius(vel, vel_right)
+        radius = self.calculate_radius(vel_left, vel_right)
         ICCx = x - radius * np.sin(heading)
         ICCy = y + radius * np.cos(heading)
         return ICCx, ICCy
@@ -92,7 +98,7 @@ class DifferentialDriveKinematics():
 
         #moving in an arc
         if radius != math.inf:
-            dtheta = (dr - dl) / (ROBOT_L)
+            dtheta = (dr - dl) / (self.width)
             ds = (dr + dl) / 2
             
             #if the period of time is small enough we can assume
