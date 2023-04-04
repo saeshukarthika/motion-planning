@@ -14,6 +14,9 @@ dt-launchfile-init
 
 # launching app
 dt-exec rosrun controls speed_controller.py
+#roslaunch perception perception.launch veh:=$VEHICLE_NAME
+# rosrun controls controls.launch
+
 
 # ----------------------------------------------------------------------------
 # YOUR CODE ABOVE THIS LINE

@@ -5,6 +5,7 @@ import rospy
 from duckietown.dtros import DTROS, NodeType
 from std_msgs.msg import String, Header
 from duckietown_msgs.msg import WheelsCmdStamped
+from include.pid import PID
 
 class SpeedControlNode(DTROS):
 
