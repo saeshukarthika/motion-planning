@@ -13,7 +13,8 @@ dt-launchfile-init
 # NOTE: Use `dt-exec COMMAND` to run the main process (blocking process)
 
 # launching app
-roslaunch perception perception.launch veh:=$VEHICLE_NAME
+dt-exec rosrun controls speed_controller.py
+#roslaunch perception perception.launch veh:=$VEHICLE_NAME
 # rosrun controls controls.launch
 
 
