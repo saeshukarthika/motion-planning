@@ -1,6 +1,12 @@
 <launch>
 
-    <!-- Template  Remove -->
-    <!-- <node pkg="perception" type="perception.py" name="perception"  output="screen"/> -->
+    <group ns="$(arg veh)">
+
+        <node pkg="controls" type="speed_controller.py"
+              name="speed_control_node"  output="screen">
+              <remap from="~/wheel_odometry/odometry"
+                     to="/$(arg veh)/wheel_odometry/odometry"/>
+        </node>
+    </group>
 
 </launch>
