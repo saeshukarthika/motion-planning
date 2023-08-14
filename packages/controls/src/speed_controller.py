@@ -19,8 +19,8 @@ class SpeedControlNode(DTROS):
         self.right_speed = 0
         self.left_goal = 0.1
         self.right_goal = 0.1
-        self.left_pid = PID(1,1,0.3,0)
-        self.right_pid = PID(1,1,0.3,0)
+        self.left_pid = PID(1,1,0.03,0)
+        self.right_pid = PID(1,1,0.03,0)
 
         self.left_pid.set(self.left_goal)
         self.right_pid.set(self.right_goal)
@@ -78,7 +78,7 @@ class SpeedControlNode(DTROS):
                wheelsCmd.vel_right = 0
                wheelsCmd.vel_left = 0
 
-            last_time = rospy.get_time()
+
             self.wheel_pub.publish(wheelsCmd)
             
             rate.sleep()
