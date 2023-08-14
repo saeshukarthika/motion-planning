@@ -17,30 +17,70 @@ class SpeedControlNode(DTROS):
         self.wheel_pub = rospy.Publisher(f"/{os.environ['VEHICLE_NAME']}/wheels_driver_node/wheels_cmd", WheelsCmdStamped, queue_size=1)
         self.left_speed = 0
         self.right_speed = 0
-        self.left_goal = 0
-        self.right_goal = 0
-        self.left_pid = PID(0,0,0,0)
-        self.right_pid = PID(0,0,0,0)
+        self.left_goal = 0.1
+        self.right_goal = 0.1
+        self.left_pid = PID(1,1,0.3,0)
+        self.right_pid = PID(1,1,0.3,0)
 
+        self.left_pid.set(self.left_goal)
+        self.right_pid.set(self.right_goal)
+        
         self.odometery_sub = rospy.Subscriber(f"~wheel_odometry/odometry",WheelOdometry,self.odometry_cb)
-        self.goal_speed_sub = rospy.Subscriber(f"~speed_control/goal",WheelOdometry,self.goal_speed_cb)
+        # self.goal_speed_sub = rospy.Subscriber(f"~speed_control/goal",WheelOdometry,self.goal_speed_cb)
         
         self.log("Initialized")
 
     def run(self):
         # publish message every 1 second
-        rate = rospy.Rate(20) # 1Hz
+        rate = rospy.Rate(10) # 1Hz
+        start_time = rospy.get_time()
         while not rospy.is_shutdown():
             self.log("sending command")
-
 
             wheelsCmd = WheelsCmdStamped()
             header = Header()
             wheelsCmd.header = header
-            wheelsCmd.vel_right = self.right_pid.update(self.right_speed,0.05)
-            wheelsCmd.vel_left = self.left_pid.update(self.left_speed,0.05)
-            self.wheel_pub.publish(wheelsCmd)
+            header.stamp = rospy.Time.now()
 
+            current_time = rospy.get_time()
+
+            # Running the bot on different velocities at different time interval
+            if 5 < current_time - start_time <= 10:
+                wheelsCmd.vel_right = self.right_pid.update(self.right_speed,0.1)
+                wheelsCmd.vel_left = self.left_pid.update(self.left_speed,0.1)
+
+            elif 10 < current_time - start_time <= 15:
+                self.left_pid.set(0.2)
+                self.right_pid.set(0.2)
+                wheelsCmd.vel_right = self.right_pid.update(self.right_speed,0.1)
+                wheelsCmd.vel_left = self.left_pid.update(self.left_speed,0.1)
+
+            elif 15 < current_time - start_time <= 20:
+                self.left_pid.set(0.3)
+                self.right_pid.set(0.3)
+                wheelsCmd.vel_right = self.right_pid.update(self.right_speed,0.1)
+                wheelsCmd.vel_left = self.left_pid.update(self.left_speed,0.1)
+            
+            elif 20 < current_time - start_time <= 25:
+                self.left_pid.set(0.4)
+                self.right_pid.set(0.4)
+                wheelsCmd.vel_right = self.right_pid.update(self.right_speed,0.1)
+                wheelsCmd.vel_left = self.left_pid.update(self.left_speed,0.1)
+            
+            elif current_time - start_time > 25:
+                self.left_pid.set(0)
+                self.right_pid.set(0)
+                wheelsCmd.vel_right = self.right_pid.update(self.right_speed,0.1)
+                wheelsCmd.vel_left = self.left_pid.update(self.left_speed,0.1)
+                print("Running on 0.0")
+                
+            else:
+               wheelsCmd.vel_right = 0
+               wheelsCmd.vel_left = 0
+
+            last_time = rospy.get_time()
+            self.wheel_pub.publish(wheelsCmd)
+            
             rate.sleep()
 
     def on_shutdown(self):
